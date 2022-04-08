@@ -1,0 +1,28 @@
+{
+  "menu": [
+    {
+      "url": "home",
+      "name": "Home",
+      "icon": "home",
+      "slug": "home"
+    },
+    {
+      "url": "strategy.trade.show",
+      "name": "Trade Strategy",
+      "icon": "activity",
+      "slug": "trade-strategies"
+    },
+    {
+      "url": "order.list",
+      "name": "Orders",
+      "icon": "trello",
+      "slug": "orders"
+    },
+    {
+      "url": "log.list",
+      "name": "Logs",
+      "icon": "file-text",
+      "slug": "logs"
+    }
+  ]
+}
