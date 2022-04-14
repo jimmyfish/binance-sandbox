@@ -44,6 +44,7 @@ class CreateOrderAction extends Controller
             'buy_price' => $price,
             'user_id' => $user->id,
             'quantity' => $request->get('quantity'),
+            'strategy' => $request->get('strategy')
         ];
 
         $duplicate = Transact::where([

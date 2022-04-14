@@ -3,7 +3,7 @@
 @section('title', 'Orders')
 
 @section('meta-block')
-<meta http-equiv="refresh" content="300">
+    <meta http-equiv="refresh" content="300">
 @endsection
 
 @section('content')
@@ -67,10 +67,42 @@
                                 </div>
                                 <div class="my-auto">
                                     <h4 class="fw-bolder mb-0">
-                                        ${{ round(array_sum($orderLists->map(function ($orderList) {return $orderList->diffDollar;})->toArray()), 2) }}
+                                        ${{ round(array_sum($orderLists->map(function ($orderList) {return $orderList->diffDollar;})->toArray()),2) }}
                                     </h4>
                                     <p class="card-text font-small-3 mb-0">Revenue</p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!--/ Statistics Card -->
+    </div>
+    <div class="row">
+
+        <!-- Statistics Card -->
+        <div class="col-12">
+            <div class="card card-progress">
+                <div class="card-body" style="padding-bottom: 0">
+                    <div class="row mb-2">
+                        @foreach ($symbols as $symbol)
+                            <div class="col-xl-3 col-sm-6 col-12 mb-2 mb-xl-0">
+                                <div class="d-flex flex-row">
+                                    <div class="my-auto">
+                                        <h4 class="fw-bolder mb-0">{{ str_replace('USDT', '', $symbol) }}</h4>
+                                        <p class="card-text font-small-3 mb-0" id="{{ strtolower($symbol) }}-price">Price
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="row">
+                        <div class="col-12 mb-2 mb-xl-0">
+                            <div class="progress progress-bar-primary" style="height: 2px">
+                                <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="5"
+                                    aria-valuemax="100" style="width: 0%"></div>
                             </div>
                         </div>
                     </div>
@@ -98,7 +130,7 @@
                             <th>Qty</th>
                             <th>Buy $</th>
                             <th>Sell $</th>
-                            <th>Status</th>
+                            <th>Strategy</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -133,16 +165,12 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if ($orderList->sell_price)
-                                            <span class="badge rounded-pill badge-light-primary me-1">Sold</span>
-                                        @else
-                                            <span class="badge rounded-pill badge-light-info me-1">Active</span>
-                                        @endif
+                                        {{ $orderList->strategy }}
                                     </td>
                                     <td>
-
                                         @if ($orderList->status === '1')
-                                            <a href="{{ route('order.close.get', ['symbol' => $orderList->symbol, 'userEmail' => Auth::user()->email]) }}">
+                                            <a
+                                                href="{{ route('order.close.get', ['symbol' => $orderList->symbol, 'userEmail' => Auth::user()->email]) }}">
                                                 <span class="btn btn-sm btn-relief-warning">
                                                     Panic sell
                                                 </span>
@@ -164,4 +192,40 @@
         </div>
     </div>
     <!--/ Kick start -->
+@endsection
+
+@section('self-script')
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script>
+        var symbols = JSON.parse('{!! json_encode($symbols) !!}')
+        symbols.forEach(symbol => {
+            fetchPrice(symbol);
+        });
+
+        setInterval(() => {
+            var progressBar = document.querySelector(".progress-bar"),
+                maxProgressBar = 100,
+                progress = parseInt(progressBar.style.width.replace("%", ""))
+
+            progressBar.style.width = (progress != 100 ? progress += 10 : progress = 0) + "%"
+        }, 1000);
+
+        setInterval(() => {
+            symbols.forEach(symbol => {
+                fetchPrice(symbol);
+            });
+        }, 11000);
+
+        function fetchPrice(symbol) {
+            axios({
+                method: 'get',
+                url: 'https://api.binance.com/api/v3/ticker/price?symbol=' + symbol
+            }).then(function(response) {
+                document.querySelector("#" + symbol.toLowerCase() + "-price").textContent = Math.round(response.data
+                    .price * 1000) / 1000;
+            }).catch(error => {
+                console.log(error)
+            });
+        }
+    </script>
 @endsection
