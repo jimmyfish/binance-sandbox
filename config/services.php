@@ -30,4 +30,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'binance' => [
+        'api_url' => env('BINANCE_API_URL', 'https://api.binance.com'),
+        'testnet_api_url' => env('BINANCE_TESTNET_API_URL', 'https://testnet.binance.vision'),
+        'use_testnet' => env('BINANCE_USE_TESTNET', false),
+    ],
+
 ];

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Order;
 
+use App\Constants\ApiMessages;
 use App\Models\User;
 use GuzzleHttp\Client;
 use App\Models\Transact;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 
 class SellOrderAction extends Controller
@@ -27,7 +29,7 @@ class SellOrderAction extends Controller
                 'user_id' => $user->id
             ])->first();
 
-        if (!$transaction) return response()->json('order not found', 400);
+        if (!$transaction) return response()->json(ApiMessages::ERROR_ORDER_NOT_FOUND, 400);
 
         $client = new Client([
             'headers' => [
@@ -36,20 +38,52 @@ class SellOrderAction extends Controller
             ]
         ]);
 
-        $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
-        $response = json_decode($response->getBody()->getContents());
-        $price = $response->price;
+        // Get Binance API base URL from config
+        $binanceConfig = config('services.binance');
+        $baseUrl = $binanceConfig['use_testnet'] ? $binanceConfig['testnet_api_url'] : $binanceConfig['api_url'];
+        $uri = '/api/v3/ticker/price';
+        $queryParams = http_build_query(['symbol' => $symbol]);
+        $fullUrl = rtrim($baseUrl, '/') . $uri . '?' . $queryParams;
 
-        // Close order
-        $closeTransaction = Transact::find($transaction->id)->update([
-            'sell_price' => $price,
-            'status' => 2
-        ]);
+        try {
+            $response = $client->get($fullUrl);
+            
+            if ($response->getStatusCode() !== 200) {
+                return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_FETCH_MARKET_PRICE], 500);
+            }
+            
+            $responseData = json_decode($response->getBody()->getContents());
+            
+            if (!isset($responseData->price)) {
+                return response()->json(['error' => ApiMessages::ERROR_INVALID_MARKET_API_RESPONSE], 500);
+            }
+            
+            $price = $responseData->price;
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CONNECT_MARKET_API], 500);
+        } catch (\Exception $e) {
+            return response()->json(['error' => ApiMessages::ERROR_FETCHING_MARKET_PRICE], 500);
+        }
 
-        $priceAggregate = $price * $transaction->quantity;
-        $newBalance = $user->balance + $priceAggregate;
-        $updateUserBalance = User::find($user->id)->update(['balance' => $newBalance]);
+        try {
+            DB::beginTransaction();
 
-        return response()->json('sell order complete');
+            // Close order
+            $transaction->update([
+                'sell_price' => $price,
+                'status' => 2
+            ]);
+
+            $priceAggregate = $price * $transaction->quantity;
+            $newBalance = $user->balance + $priceAggregate;
+            $user->update(['balance' => $newBalance]);
+
+            DB::commit();
+
+            return response()->json(ApiMessages::SUCCESS_SELL_ORDER_COMPLETE);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CLOSE_ORDER], 500);
+        }
     }
 }

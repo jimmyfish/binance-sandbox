@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Order;
 
+use App\Constants\ApiMessages;
 use App\Http\Controllers\Controller;
 use App\Models\Transact;
 use App\Models\User;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CreateOrderAction extends Controller
@@ -28,16 +30,39 @@ class CreateOrderAction extends Controller
 
         $symbol = $request->get('symbol');
 
-        $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
-        $response = json_decode($response->getBody()->getContents());
-        $price = $response->price;
+        // Get Binance API base URL from config
+        $binanceConfig = config('services.binance');
+        $baseUrl = $binanceConfig['use_testnet'] ? $binanceConfig['testnet_api_url'] : $binanceConfig['api_url'];
+        $uri = '/api/v3/ticker/price';
+        $queryParams = http_build_query(['symbol' => $symbol]);
+        $fullUrl = rtrim($baseUrl, '/') . $uri . '?' . $queryParams;
+
+        try {
+            $response = $client->get($fullUrl);
+            
+            if ($response->getStatusCode() !== 200) {
+                return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_FETCH_MARKET_PRICE], 500);
+            }
+            
+            $responseData = json_decode($response->getBody()->getContents());
+            
+            if (!isset($responseData->price)) {
+                return response()->json(['error' => ApiMessages::ERROR_INVALID_MARKET_API_RESPONSE], 500);
+            }
+            
+            $price = $responseData->price;
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CONNECT_MARKET_API], 500);
+        } catch (\Exception $e) {
+            return response()->json(['error' => ApiMessages::ERROR_FETCHING_MARKET_PRICE], 500);
+        }
 
         $user = User::where('email', $request->get('userEmail'))->first();
 
         $priceAggregate = $price * $request->get('quantity');
         $newBalance = $user->balance - $priceAggregate;
 
-        if ($newBalance < 0) return response()->json('insufficient balance', 400);
+        if ($newBalance < 0) return response()->json(ApiMessages::ERROR_INSUFFICIENT_BALANCE, 400);
 
         $payload = [
             'symbol' => $symbol,
@@ -54,12 +79,21 @@ class CreateOrderAction extends Controller
         ])->get();
 
         if ($duplicate->count() > 0) {
-            return response()->json('rejection', 400);
+            return response()->json(ApiMessages::ERROR_ORDER_REJECTION, 400);
         }
 
-        $transact = Transact::insert($payload);
-        $updateUserBalance = User::find($user->id)->update(['balance' => $newBalance]);
+        try {
+            DB::beginTransaction();
 
-        return response()->json($transact);
+            $transact = Transact::create($payload);
+            $user->update(['balance' => $newBalance]);
+
+            DB::commit();
+
+            return response()->json($transact);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CREATE_ORDER], 500);
+        }
     }
 }

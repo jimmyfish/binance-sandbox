@@ -14,5 +14,9 @@ class TradeStrategy extends Model
 
     protected $table = 'trade_strategies';
 
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'description',
+        // Add other fillable fields as needed
+    ];
 }
