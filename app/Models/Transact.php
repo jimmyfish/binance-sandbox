@@ -11,7 +11,15 @@ class Transact extends Model
 
     protected $table = 'transact';
 
-    protected $guarded = [];
+    protected $fillable = [
+        'symbol',
+        'buy_price',
+        'sell_price',
+        'quantity',
+        'user_id',
+        'status',
+        'strategy',
+    ];
 
     public function user()
     {

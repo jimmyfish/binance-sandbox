@@ -21,8 +21,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::post('order', CreateOrderAction::class)->name('order.create');
-Route::delete('order', SellOrderAction::class)->name('order.close');
-Route::get('order', SellOrderAction::class)->name('order.close.get');
-
-Route::post('log', LoggerAction::class)->name('log.write');
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('order', CreateOrderAction::class)->name('order.create');
+    Route::delete('order', SellOrderAction::class)->name('order.close');
+    Route::get('order', SellOrderAction::class)->name('order.close.get');
+    Route::post('log', LoggerAction::class)->name('log.write');
+});

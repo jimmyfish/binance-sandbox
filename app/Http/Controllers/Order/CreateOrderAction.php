@@ -7,6 +7,7 @@ use App\Models\Transact;
 use App\Models\User;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CreateOrderAction extends Controller
@@ -28,9 +29,25 @@ class CreateOrderAction extends Controller
 
         $symbol = $request->get('symbol');
 
-        $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
-        $response = json_decode($response->getBody()->getContents());
-        $price = $response->price;
+        try {
+            $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
+            
+            if ($response->getStatusCode() !== 200) {
+                return response()->json(['error' => 'Failed to fetch market price'], 500);
+            }
+            
+            $responseData = json_decode($response->getBody()->getContents());
+            
+            if (!isset($responseData->price)) {
+                return response()->json(['error' => 'Invalid response from market API'], 500);
+            }
+            
+            $price = $responseData->price;
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            return response()->json(['error' => 'Failed to connect to market API'], 500);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'An error occurred while fetching market price'], 500);
+        }
 
         $user = User::where('email', $request->get('userEmail'))->first();
 
@@ -57,9 +74,18 @@ class CreateOrderAction extends Controller
             return response()->json('rejection', 400);
         }
 
-        $transact = Transact::insert($payload);
-        $updateUserBalance = User::find($user->id)->update(['balance' => $newBalance]);
+        try {
+            DB::beginTransaction();
 
-        return response()->json($transact);
+            $transact = Transact::create($payload);
+            $user->update(['balance' => $newBalance]);
+
+            DB::commit();
+
+            return response()->json($transact);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create order'], 500);
+        }
     }
 }

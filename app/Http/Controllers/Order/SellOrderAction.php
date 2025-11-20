@@ -6,6 +6,7 @@ use App\Models\User;
 use GuzzleHttp\Client;
 use App\Models\Transact;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 
 class SellOrderAction extends Controller
@@ -36,20 +37,45 @@ class SellOrderAction extends Controller
             ]
         ]);
 
-        $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
-        $response = json_decode($response->getBody()->getContents());
-        $price = $response->price;
+        try {
+            $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
+            
+            if ($response->getStatusCode() !== 200) {
+                return response()->json(['error' => 'Failed to fetch market price'], 500);
+            }
+            
+            $responseData = json_decode($response->getBody()->getContents());
+            
+            if (!isset($responseData->price)) {
+                return response()->json(['error' => 'Invalid response from market API'], 500);
+            }
+            
+            $price = $responseData->price;
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            return response()->json(['error' => 'Failed to connect to market API'], 500);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'An error occurred while fetching market price'], 500);
+        }
 
-        // Close order
-        $closeTransaction = Transact::find($transaction->id)->update([
-            'sell_price' => $price,
-            'status' => 2
-        ]);
+        try {
+            DB::beginTransaction();
 
-        $priceAggregate = $price * $transaction->quantity;
-        $newBalance = $user->balance + $priceAggregate;
-        $updateUserBalance = User::find($user->id)->update(['balance' => $newBalance]);
+            // Close order
+            $transaction->update([
+                'sell_price' => $price,
+                'status' => 2
+            ]);
 
-        return response()->json('sell order complete');
+            $priceAggregate = $price * $transaction->quantity;
+            $newBalance = $user->balance + $priceAggregate;
+            $user->update(['balance' => $newBalance]);
+
+            DB::commit();
+
+            return response()->json('sell order complete');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to close order'], 500);
+        }
     }
 }
