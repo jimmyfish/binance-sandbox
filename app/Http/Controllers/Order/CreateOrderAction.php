@@ -30,8 +30,15 @@ class CreateOrderAction extends Controller
 
         $symbol = $request->get('symbol');
 
+        // Get Binance API base URL from config
+        $binanceConfig = config('services.binance');
+        $baseUrl = $binanceConfig['use_testnet'] ? $binanceConfig['testnet_api_url'] : $binanceConfig['api_url'];
+        $uri = '/api/v3/ticker/price';
+        $queryParams = http_build_query(['symbol' => $symbol]);
+        $fullUrl = rtrim($baseUrl, '/') . $uri . '?' . $queryParams;
+
         try {
-            $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
+            $response = $client->get($fullUrl);
             
             if ($response->getStatusCode() !== 200) {
                 return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_FETCH_MARKET_PRICE], 500);
