@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Order;
 
+use App\Constants\ApiMessages;
 use App\Http\Controllers\Controller;
 use App\Models\Transact;
 use App\Models\User;
@@ -33,20 +34,20 @@ class CreateOrderAction extends Controller
             $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
             
             if ($response->getStatusCode() !== 200) {
-                return response()->json(['error' => 'Failed to fetch market price'], 500);
+                return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_FETCH_MARKET_PRICE], 500);
             }
             
             $responseData = json_decode($response->getBody()->getContents());
             
             if (!isset($responseData->price)) {
-                return response()->json(['error' => 'Invalid response from market API'], 500);
+                return response()->json(['error' => ApiMessages::ERROR_INVALID_MARKET_API_RESPONSE], 500);
             }
             
             $price = $responseData->price;
         } catch (\GuzzleHttp\Exception\RequestException $e) {
-            return response()->json(['error' => 'Failed to connect to market API'], 500);
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CONNECT_MARKET_API], 500);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'An error occurred while fetching market price'], 500);
+            return response()->json(['error' => ApiMessages::ERROR_FETCHING_MARKET_PRICE], 500);
         }
 
         $user = User::where('email', $request->get('userEmail'))->first();
@@ -54,7 +55,7 @@ class CreateOrderAction extends Controller
         $priceAggregate = $price * $request->get('quantity');
         $newBalance = $user->balance - $priceAggregate;
 
-        if ($newBalance < 0) return response()->json('insufficient balance', 400);
+        if ($newBalance < 0) return response()->json(ApiMessages::ERROR_INSUFFICIENT_BALANCE, 400);
 
         $payload = [
             'symbol' => $symbol,
@@ -71,7 +72,7 @@ class CreateOrderAction extends Controller
         ])->get();
 
         if ($duplicate->count() > 0) {
-            return response()->json('rejection', 400);
+            return response()->json(ApiMessages::ERROR_ORDER_REJECTION, 400);
         }
 
         try {
@@ -85,7 +86,7 @@ class CreateOrderAction extends Controller
             return response()->json($transact);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Failed to create order'], 500);
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CREATE_ORDER], 500);
         }
     }
 }

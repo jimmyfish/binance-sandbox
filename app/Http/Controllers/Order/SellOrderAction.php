@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Order;
 
+use App\Constants\ApiMessages;
 use App\Models\User;
 use GuzzleHttp\Client;
 use App\Models\Transact;
@@ -28,7 +29,7 @@ class SellOrderAction extends Controller
                 'user_id' => $user->id
             ])->first();
 
-        if (!$transaction) return response()->json('order not found', 400);
+        if (!$transaction) return response()->json(ApiMessages::ERROR_ORDER_NOT_FOUND, 400);
 
         $client = new Client([
             'headers' => [
@@ -41,20 +42,20 @@ class SellOrderAction extends Controller
             $response = $client->get("https://api.binance.com/api/v3/ticker/price?symbol=$symbol");
             
             if ($response->getStatusCode() !== 200) {
-                return response()->json(['error' => 'Failed to fetch market price'], 500);
+                return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_FETCH_MARKET_PRICE], 500);
             }
             
             $responseData = json_decode($response->getBody()->getContents());
             
             if (!isset($responseData->price)) {
-                return response()->json(['error' => 'Invalid response from market API'], 500);
+                return response()->json(['error' => ApiMessages::ERROR_INVALID_MARKET_API_RESPONSE], 500);
             }
             
             $price = $responseData->price;
         } catch (\GuzzleHttp\Exception\RequestException $e) {
-            return response()->json(['error' => 'Failed to connect to market API'], 500);
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CONNECT_MARKET_API], 500);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'An error occurred while fetching market price'], 500);
+            return response()->json(['error' => ApiMessages::ERROR_FETCHING_MARKET_PRICE], 500);
         }
 
         try {
@@ -72,10 +73,10 @@ class SellOrderAction extends Controller
 
             DB::commit();
 
-            return response()->json('sell order complete');
+            return response()->json(ApiMessages::SUCCESS_SELL_ORDER_COMPLETE);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Failed to close order'], 500);
+            return response()->json(['error' => ApiMessages::ERROR_FAILED_TO_CLOSE_ORDER], 500);
         }
     }
 }
