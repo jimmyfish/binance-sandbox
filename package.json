@@ -10,7 +10,7 @@
         "production": "mix --production"
     },
     "dependencies": {
-        "bootstrap": "~5.1.0"
+        "bootstrap": "~5.2.3"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.4.0",
